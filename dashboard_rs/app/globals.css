@@ -1,0 +1,32 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #14532D;
+  --card: #ffffff;
+  --card-foreground: #14532D;
+  --popover: #ffffff;
+  --popover-foreground: #14532D;
+  --primary: #94D8AB;
+  --primary-foreground: #14532D;
+  --secondary: #DCF3E3;
+  --secondary-foreground: #14532D;
+  --muted: #F0FAF3;
+  --muted-foreground: #475569;
+  --accent: #DCF3E3;
+  --accent-foreground: #14532D;
+  --border: #D5E6DA;
+  --input: #D5E6DA;
+  --ring: #2F855A;
+  --radius: 0.875rem;
+}
+
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body { margin: 0; background: #fbfefc; font-family: Inter, 'Noto Sans Bengali', Hind Siliguri, sans-serif; }
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(47,133,90,.28); outline-offset: 2px; }
