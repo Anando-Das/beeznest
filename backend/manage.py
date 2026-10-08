@@ -3,7 +3,6 @@
 import os
 import sys
 
-
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -15,8 +14,11 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
+    import django.db.backends.base.base
+    import django.db.backends.mysql.features
+    django.db.backends.base.base.BaseDatabaseWrapper.check_database_version_supported = lambda self: None
+    django.db.backends.mysql.features.DatabaseFeatures.can_return_columns_from_insert = False
     execute_from_command_line(sys.argv)
-
 
 if __name__ == '__main__':
     main()

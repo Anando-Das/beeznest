@@ -13,6 +13,7 @@ import StaffManager from '@/components/StaffManager'
 import ExpensesManager from '@/components/ExpensesManager'
 import DayCloseManager from '@/components/DayCloseManager'
 import ReportsManager from '@/components/ReportsManager'
+import ReservationManager from '@/components/ReservationManager'
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Bell, BookOpen, Boxes, BriefcaseBusiness,
   CalendarDays, Check, ChevronDown, CircleDollarSign, Clock3, Coffee, Contact, CreditCard, Crown,
@@ -24,7 +25,7 @@ import {
 const green = '#2F855A'
 const nav: { group: string, items: [string, string, any][] }[] = [
   { group: 'Overview', items: [['Dashboard', '/dashboard', LayoutDashboard], ['Sales', '/sales', ShoppingCart], ['Orders', '/orders', ReceiptText], ['Kitchen', '/kitchen', Utensils]] },
-  { group: 'Manage', items: [['Menu', '/menu', Utensils], ['Layout', '/layout', Grid2X2], ['Customers', '/customers', Users], ['Staff', '/staff', Contact]] },
+  { group: 'Manage', items: [['Menu', '/menu', Utensils], ['Layout', '/layout', Grid2X2], ['Reservations', '/reservations', CalendarDays], ['Customers', '/customers', Users], ['Staff', '/staff', Contact]] },
   { group: 'Grow', items: [['Marketing', '/marketing', MessageSquare], ['Upsell', '/upsell', Zap], ['QR Ordering', '/qr-ordering', QrCode], ['Website', '/website', Store], ['AI Manager', '/ai', Sparkles]] },
   { group: 'Money', items: [['Reports', '/reports', FileBarChart], ['Expenses', '/expenses', WalletCards], ['Day Close', '/day-close', CircleDollarSign]] },
 ]
@@ -45,6 +46,7 @@ export default function Page() {
 
   const [path, setPath] = useState('/dashboard')
   const [role, setRole] = useState('Owner')
+  const [prefillTableId, setPrefillTableId] = useState<number | null>(null)
   const [lang, setLang] = useState('EN')
   const [mobileNav, setMobileNav] = useState(false)
 
@@ -66,11 +68,11 @@ export default function Page() {
   const canSee = (label: string) => {
     if (!role) return false;
     const p: Record<string, string[]> = {
-      OWNER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Customers', 'Staff', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
-      MANAGER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Customers', 'Staff', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
-      CASHIER: ['Dashboard', 'Sales', 'Orders', 'Customers'],
-      WAITER: ['Dashboard', 'Sales', 'Orders', 'Customers'],
-      KITCHEN: ['Dashboard', 'Kitchen']
+      OWNER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Reservations', 'Customers', 'Staff', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
+      MANAGER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Reservations', 'Customers', 'Staff', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
+      CASHIER: ['Dashboard', 'Sales', 'Orders', 'Customers', 'Reservations'],
+      WAITER: ['Dashboard', 'Sales', 'Orders', 'Customers', 'Reservations'],
+      KITCHEN: ['Dashboard', 'Kitchen', 'Menu']
     };
     return p[role]?.includes(label) || false;
   }
@@ -91,7 +93,7 @@ export default function Page() {
   }
 
   return <div className="min-h-screen bg-[#fbfefc] text-[#14532D]">
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-[#D5E6DA] bg-[#F0FAF3] lg:flex">
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-[#D5E6DA] bg-[#F0FAF3] lg:flex print:hidden">
       <div className="flex h-20 items-center gap-3 border-b border-[#D5E6DA] px-5"><div className="flex size-10 items-center justify-center rounded-xl bg-[#94D8AB] text-[#14532D]"><Utensils size={20} /></div><div><div className="font-bold tracking-tight">RestoCRM</div><div className="text-xs text-[#475569]">{user?.restaurant ? 'Restaurant ID: ' + user.restaurant : 'No Restaurant'}</div></div></div>
       <div className="flex-1 overflow-y-auto px-3 py-5">{nav.map((group) => <div key={group.group} className="mb-6"><div className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[.16em] text-[#6b8b76]">{group.group}</div><div className="flex flex-col gap-1">{group.items.map(([label, href, Icon]) => {
         const allowed = canSee(label as string);
@@ -99,24 +101,25 @@ export default function Page() {
       })}</div></div>)}</div>
       <div className="border-t border-[#D5E6DA] p-3"><button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm text-[#475569] hover:bg-[#DCF3E3]"><Settings size={18} />Settings</button><button className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-sm text-[#475569] hover:bg-[#DCF3E3]"><HelpCircle size={18} />Help & support</button></div>
     </aside>
-    <header className="fixed inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-[#D5E6DA] bg-white/95 px-4 backdrop-blur lg:left-60 lg:px-8"><div className="flex items-center gap-3"><button onClick={() => setMobileNav(true)} className="rounded-xl p-2 hover:bg-[#F0FAF3] lg:hidden"><Menu size={21} /></button><div><div className="text-sm font-semibold">{title}</div><div className="hidden text-xs text-[#64748b] sm:block">{user?.restaurant ? 'Restaurant ID: ' + user.restaurant : 'No Restaurant'} <span className="mx-1">/</span> {title}</div></div></div><div className="hidden max-w-sm flex-1 px-8 md:block"><div className="flex h-10 items-center gap-2 rounded-xl border border-[#D5E6DA] bg-[#fbfefc] px-3 text-sm text-[#94a3b8]"><Search size={17} /> Search orders, customers, menu <kbd className="ml-auto rounded border px-1.5 py-0.5 text-[10px]">/</kbd></div></div><div className="flex items-center gap-2 sm:gap-3"><button onClick={() => setLang(lang === 'EN' ? 'BN' : 'EN')} className="hidden rounded-lg px-2 py-1 text-xs font-bold text-[#2F855A] hover:bg-[#F0FAF3] sm:block">{lang === 'EN' ? 'EN · BN' : 'BN · EN'}</button><div className="hidden items-center gap-2 rounded-full bg-[#DCF3E3] px-3 py-1.5 text-xs font-semibold text-[#2F855A] sm:flex"><span className="size-2 rounded-full bg-[#2F855A]" /> Day open · 10:05</div><button className="relative rounded-xl p-2 hover:bg-[#F0FAF3]"><Bell size={19} /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#B42318]" /></button><button onClick={async () => { await fetchApi('/logout/', { method: 'POST' }); router.push('/login'); }} className="flex size-9 items-center justify-center rounded-full bg-[#14532D] text-sm font-bold text-white" title="Logout">{role[0]}</button></div></header>
-    <main className="min-h-screen pt-16 lg:pl-60">
-      <div className="mx-auto max-w-[1500px] p-4 pb-24 sm:p-6 lg:p-8">
+    <header className="fixed inset-x-0 top-0 z-20 flex h-16 items-center justify-between border-b border-[#D5E6DA] bg-white/95 px-4 backdrop-blur lg:left-60 lg:px-8 print:hidden"><div className="flex items-center gap-3"><button onClick={() => setMobileNav(true)} className="rounded-xl p-2 hover:bg-[#F0FAF3] lg:hidden"><Menu size={21} /></button><div><div className="text-sm font-semibold">{title}</div><div className="hidden text-xs text-[#64748b] sm:block">{user?.restaurant ? 'Restaurant ID: ' + user.restaurant : 'No Restaurant'} <span className="mx-1">/</span> {title}</div></div></div><div className="hidden max-w-sm flex-1 px-8 md:block"><div className="flex h-10 items-center gap-2 rounded-xl border border-[#D5E6DA] bg-[#fbfefc] px-3 text-sm text-[#94a3b8]"><Search size={17} /> Search orders, customers, menu <kbd className="ml-auto rounded border px-1.5 py-0.5 text-[10px]">/</kbd></div></div><div className="flex items-center gap-2 sm:gap-3"><button onClick={() => setLang(lang === 'EN' ? 'BN' : 'EN')} className="hidden rounded-lg px-2 py-1 text-xs font-bold text-[#2F855A] hover:bg-[#F0FAF3] sm:block">{lang === 'EN' ? 'EN · BN' : 'BN · EN'}</button><div className="hidden items-center gap-2 rounded-full bg-[#DCF3E3] px-3 py-1.5 text-xs font-semibold text-[#2F855A] sm:flex"><span className="size-2 rounded-full bg-[#2F855A]" /> Day open · 10:05</div><button className="relative rounded-xl p-2 hover:bg-[#F0FAF3]"><Bell size={19} /><span className="absolute right-1 top-1 size-2 rounded-full bg-[#B42318]" /></button><button onClick={async () => { await fetchApi('/logout/', { method: 'POST' }); router.push('/login'); }} className="flex size-9 items-center justify-center rounded-full bg-[#14532D] text-sm font-bold text-white" title="Logout">{role[0]}</button></div></header>
+    <main className="min-h-screen pt-16 lg:pl-60 print:pt-0 print:pl-0">
+      <div className="mx-auto max-w-[1500px] p-4 pb-24 sm:p-6 lg:p-8 print:p-0">
         {path === '/dashboard' && (canSee('Dashboard') ? <Dashboard go={go} user={user} /> : <LockedView />)}
         {path === '/sales' && (canSee('Sales') ? <SalesManager /> : <LockedView />)}
         {path === '/orders' && (canSee('Orders') ? <OrdersManager /> : <LockedView />)}
         {path === '/kitchen' && (canSee('Kitchen') ? <KitchenManager /> : <LockedView />)}
         {path === '/menu' && (canSee('Menu') ? <MenuManager /> : <LockedView />)}
-        {path === '/layout' && (canSee('Layout') ? <LayoutManager /> : <LockedView />)}
+        {path === '/layout' && (canSee('Layout') ? <LayoutManager onReserveTable={(id) => { setPrefillTableId(id); go('/reservations') }} /> : <LockedView />)}
+        {path === '/reservations' && (canSee('Reservations') ? <ReservationManager userRole={role} prefillTableId={prefillTableId} onPrefillConsumed={() => setPrefillTableId(null)} /> : <LockedView />)}
         {path === '/customers' && (canSee('Customers') ? <CustomersManager /> : <LockedView />)}
         {path === '/staff' && (canSee('Staff') ? <StaffManager userRole={role} /> : <LockedView />)}
         {path === '/expenses' && (canSee('Expenses') ? <ExpensesManager /> : <LockedView />)}
         {path === '/day-close' && (canSee('Day Close') ? <DayCloseManager /> : <LockedView />)}
         {path === '/reports' && (canSee('Reports') ? <ReportsManager /> : <LockedView />)}
-        {!['/dashboard', '/sales', '/orders', '/kitchen', '/menu', '/layout', '/customers', '/staff', '/expenses', '/day-close', '/reports'].includes(path) && <Placeholder title={title} path={path} go={go} />}
+        {!['/dashboard', '/sales', '/orders', '/kitchen', '/menu', '/layout', '/reservations', '/customers', '/staff', '/expenses', '/day-close', '/reports'].includes(path) && <Placeholder title={title} path={path} go={go} />}
       </div>
     </main>
-    <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-around border-t border-[#D5E6DA] bg-white lg:hidden">{([['Sales', '/sales', ShoppingCart], ['Orders', '/orders', ReceiptText], ['Kitchen', '/kitchen', Utensils], ['Dashboard', '/dashboard', Home], ['More', '/more', MoreHorizontal]] as [string, string, any][]).map(([label, href, Icon]) => {
+    <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-around border-t border-[#D5E6DA] bg-white lg:hidden print:hidden">{([['Sales', '/sales', ShoppingCart], ['Orders', '/orders', ReceiptText], ['Kitchen', '/kitchen', Utensils], ['Dashboard', '/dashboard', Home], ['More', '/more', MoreHorizontal]] as [string, string, any][]).map(([label, href, Icon]) => {
       const allowed = href === '/more' || canSee(label as string);
       return <button key={label as string} onClick={() => { if (!allowed) { alert("You don't have permission to access this feature."); return; }; href === '/more' ? setMobileNav(true) : go(href as string); }} className={cn('flex min-w-14 flex-col items-center gap-1 text-[10px] font-semibold relative', path === href ? 'text-[#2F855A]' : allowed ? 'text-[#64748b]' : 'text-[#94a3b8] opacity-50')}><Icon size={19} />{label}{!allowed && <Lock size={10} className="absolute top-0 right-2" />}</button>
     })}</nav>

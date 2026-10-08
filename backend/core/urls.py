@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import SignupView, LoginView, LogoutView, MeView, CSRFTokenView, RestaurantOnboardingView, CategoryViewSet, MenuItemViewSet, TableViewSet, OrderViewSet, OrderItemViewSet, CustomerViewSet, ExpenseViewSet, DayCloseViewSet, StaffViewSet
+from .views import ZoneViewSet, ReservationViewSet, SignupView, LoginView, LogoutView, MeView, CSRFTokenView, RestaurantOnboardingView, CategoryViewSet, MenuItemViewSet, MenuItemPriceHistoryViewSet, TableViewSet, OrderViewSet, OrderItemViewSet, CustomerViewSet, ExpenseViewSet, DayCloseViewSet, StaffViewSet, LayoutObjectViewSet
 
 urlpatterns = [
     path('csrf/', CSRFTokenView.as_view(), name='csrf'),
@@ -14,7 +14,11 @@ urlpatterns = [
 router = DefaultRouter()
 router.register(r'categories', CategoryViewSet, basename='category')
 router.register(r'menu-items', MenuItemViewSet, basename='menu-item')
+router.register(r'menu-item-price-history', MenuItemPriceHistoryViewSet, basename='menu-item-price-history')
 router.register(r'tables', TableViewSet, basename='table')
+router.register(r'zones', ZoneViewSet, basename='zone')
+router.register(r'layout-objects', LayoutObjectViewSet, basename='layout-object')
+router.register(r'reservations', ReservationViewSet, basename='reservation')
 router.register(r'orders', OrderViewSet, basename='order')
 router.register(r'order-items', OrderItemViewSet, basename='order-item')
 router.register(r'customers', CustomerViewSet, basename='customer')
