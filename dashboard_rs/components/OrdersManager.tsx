@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { fetchApi } from '@/lib/api'
-import { Loader2, X, Edit, Trash2, CreditCard, Receipt as ReceiptIcon, Printer } from 'lucide-react'
+import { Loader2, X, Edit, Trash2, CreditCard, Receipt as ReceiptIcon, Printer, Sparkles, TrendingUp } from 'lucide-react'
 
 export default function OrdersManager() {
   const [orders, setOrders] = useState<any[]>([])
@@ -12,7 +12,13 @@ export default function OrdersManager() {
   
   const [checkoutOrder, setCheckoutOrder] = useState<any>(null)
   const [paymentMethod, setPaymentMethod] = useState('cash')
-  
+
+  const [loyaltySettings, setLoyaltySettings] = useState<any>(null)
+  const [customerPoints, setCustomerPoints] = useState<number | null>(null)
+  const [pointsToRedeem, setPointsToRedeem] = useState<number>(0)
+  const [redeemingPoints, setRedeemingPoints] = useState(false)
+  const [loyaltyError, setLoyaltyError] = useState<string | null>(null)
+
   const [receiptOrder, setReceiptOrder] = useState<any>(null)
 
   useEffect(() => {
@@ -28,6 +34,21 @@ export default function OrdersManager() {
       setError(err.message)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadLoyaltyInfo = async (order: any) => {
+    try {
+      const [settings, customer] = await Promise.all([
+        fetchApi('/loyalty-settings/my_settings/').catch(() => null),
+        order.customer ? fetchApi(`/customers/${order.customer}/`).catch(() => null) : null
+      ])
+      setLoyaltySettings(settings)
+      setCustomerPoints(customer?.points || null)
+      setPointsToRedeem(0)
+      setLoyaltyError(null)
+    } catch (err: any) {
+      setLoyaltyError('Failed to load loyalty information')
     }
   }
 
@@ -102,6 +123,9 @@ export default function OrdersManager() {
       })
       const updatedOrder = { ...checkoutOrder, status: 'paid', payment: { amount: checkoutOrder.total_amount, method: paymentMethod, timestamp: new Date().toISOString() }, restaurant_name: checkoutOrder.restaurant_name, customer_phone: checkoutOrder.customer_phone }
       setCheckoutOrder(null)
+      setLoyaltySettings(null)
+      setCustomerPoints(null)
+      setPointsToRedeem(0)
       setReceiptOrder(updatedOrder)
       loadOrders()
     } catch (err: any) {
@@ -238,8 +262,11 @@ export default function OrdersManager() {
                         >
                           <Trash2 size={14} />
                         </button>
-                        <button 
-                          onClick={() => setCheckoutOrder(order)}
+                        <button
+                          onClick={() => {
+                            setCheckoutOrder(order)
+                            loadLoyaltyInfo(order)
+                          }}
                           className="px-3 py-1 bg-[#94D8AB] hover:bg-[#86CB9D] text-[#14532D] text-xs font-bold rounded flex items-center gap-1 ml-1"
                           title="Checkout/Pay"
                         >
@@ -337,14 +364,14 @@ export default function OrdersManager() {
 
       {checkoutOrder && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold">Checkout Order #{checkoutOrder.id}</h2>
-              <button onClick={() => setCheckoutOrder(null)} className="p-1 hover:bg-gray-100 rounded">
+              <button onClick={() => { setCheckoutOrder(null); setLoyaltySettings(null); setCustomerPoints(null); setPointsToRedeem(0); setLoyaltyError(null); }} className="p-1 hover:bg-gray-100 rounded">
                 <X size={18} />
               </button>
             </div>
-            
+
             <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
               <div className="flex justify-between text-lg font-bold mb-2 text-[#14532D]">
                 <span>Total Amount</span>
@@ -355,6 +382,40 @@ export default function OrdersManager() {
               </div>
             </div>
 
+            {/* Loyalty Points Redemption */}
+            {loyaltySettings?.enabled && checkoutOrder.customer && customerPoints !== null && (
+              <div className="mb-6 p-4 bg-[#DCF3E3] rounded-xl border border-[#94D8AB]">
+                <div className="flex items-center gap-2 mb-3">
+                  <Sparkles size={18} className="text-[#2F855A]" />
+                  <span className="font-semibold text-[#14532D]">Loyalty Points</span>
+                </div>
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm text-[#2f5d43]">Available Points</span>
+                  <span className="font-bold text-[#2F855A]">{customerPoints}</span>
+                </div>
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-[#2f5d43] mb-1">Points to Redeem</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={customerPoints}
+                    value={pointsToRedeem}
+                    onChange={(e) => setPointsToRedeem(Math.min(customerPoints, Math.max(0, parseInt(e.target.value) || 0)))}
+                    className="w-full rounded-lg border border-[#94D8AB] px-3 py-2 text-sm focus:border-[#2F855A] focus:outline-none"
+                  />
+                </div>
+                {pointsToRedeem > 0 && (
+                  <div className="flex justify-between items-center text-sm text-[#2f5d43]">
+                    <span>Discount ({pointsToRedeem} points)</span>
+                    <span className="font-bold">-৳{(pointsToRedeem * loyaltySettings.points_redemption_rate).toFixed(2)}</span>
+                  </div>
+                )}
+                {loyaltyError && (
+                  <div className="mt-2 text-xs text-red-600">{loyaltyError}</div>
+                )}
+              </div>
+            )}
+
             <div className="mb-6">
               <label className="block text-sm font-semibold mb-3">Payment Method</label>
               <div className="grid grid-cols-2 gap-3">
@@ -363,8 +424,8 @@ export default function OrdersManager() {
                     key={method}
                     onClick={() => setPaymentMethod(method)}
                     className={`py-3 px-4 rounded-xl border-2 font-semibold capitalize transition-colors ${
-                      paymentMethod === method 
-                        ? 'border-[#94D8AB] bg-[#F0FAF3] text-[#14532D]' 
+                      paymentMethod === method
+                        ? 'border-[#94D8AB] bg-[#F0FAF3] text-[#14532D]'
                         : 'border-gray-200 text-gray-600 hover:border-gray-300'
                     }`}
                   >
@@ -373,14 +434,80 @@ export default function OrdersManager() {
                 ))}
               </div>
             </div>
-            
-            <button 
-              onClick={handleProcessPayment}
-              disabled={submitting}
-              className="w-full py-4 rounded-xl bg-[#94D8AB] text-[#14532D] font-bold text-lg disabled:opacity-50 hover:bg-[#86CB9D] transition-colors"
-            >
-              {submitting ? 'Processing...' : 'Confirm Payment'}
-            </button>
+
+            {pointsToRedeem > 0 && (
+              <div className="mb-4 p-3 bg-[#F0FAF3] rounded-xl border border-[#D5E6DA]">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-[#64748b]">Original Total</span>
+                  <span className="font-medium">৳{checkoutOrder.total_amount}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm text-[#2F855A]">
+                  <span className="flex items-center gap-1"><TrendingUp size={14} /> Points Discount</span>
+                  <span className="font-bold">-৳{(pointsToRedeem * loyaltySettings?.points_redemption_rate || 0).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-lg font-bold text-[#14532D] mt-2 pt-2 border-t border-[#D5E6DA]">
+                  <span>Final Amount</span>
+                  <span>৳{(parseFloat(checkoutOrder.total_amount) - (pointsToRedeem * (loyaltySettings?.points_redemption_rate || 0))).toFixed(2)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {pointsToRedeem > 0 && (
+                <button
+                  onClick={() => setPointsToRedeem(0)}
+                  disabled={redeemingPoints}
+                  className="flex-1 py-4 rounded-xl border border-gray-300 text-gray-700 font-bold text-lg disabled:opacity-50 hover:bg-gray-50 transition-colors"
+                >
+                  Clear Points
+                </button>
+              )}
+              <button
+                onClick={async () => {
+                  if (pointsToRedeem > 0) {
+                    setRedeemingPoints(true)
+                    setLoyaltyError(null)
+                    try {
+                      const response = await fetchApi('/point-transactions/redeem/', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          points_to_redeem: pointsToRedeem,
+                          order_id: checkoutOrder.id,
+                          payment_method: paymentMethod
+                        })
+                      })
+
+                      if (response.payment_processed) {
+                        // Payment was processed atomically with redemption
+                        setCheckoutOrder(null)
+                        setLoyaltySettings(null)
+                        setCustomerPoints(null)
+                        setPointsToRedeem(0)
+                        setReceiptOrder(response.order)
+                        loadOrders()
+                      } else {
+                        // Only points were redeemed, need to pay separately
+                        setCustomerPoints((customerPoints || 0) - pointsToRedeem)
+                        // Reload order to get updated total
+                        const updatedOrder = await fetchApi(`/orders/${checkoutOrder.id}/`)
+                        setCheckoutOrder(updatedOrder)
+                        setPointsToRedeem(0)
+                      }
+                    } catch (err: any) {
+                      setLoyaltyError(err.message || 'Failed to redeem points')
+                    } finally {
+                      setRedeemingPoints(false)
+                    }
+                  } else {
+                    await handleProcessPayment()
+                  }
+                }}
+                disabled={submitting || redeemingPoints}
+                className={`${pointsToRedeem > 0 ? 'flex-1' : 'w-full'} py-4 rounded-xl bg-[#94D8AB] text-[#14532D] font-bold text-lg disabled:opacity-50 hover:bg-[#86CB9D] transition-colors`}
+              >
+                {redeemingPoints ? 'Processing...' : pointsToRedeem > 0 ? 'Apply Points & Pay' : submitting ? 'Processing...' : 'Confirm Payment'}
+              </button>
+            </div>
           </div>
         </div>
       )}

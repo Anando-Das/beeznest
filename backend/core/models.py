@@ -185,6 +185,9 @@ class Customer(models.Model):
     points = models.IntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Virtual columns for duplicate prevention (added via migration)
+    # These are managed at database level for MariaDB 10.4 compatibility
+
     def __str__(self):
         return self.name
 
@@ -280,3 +283,64 @@ class ReservationHistory(models.Model):
 
     def __str__(self):
         return f"{self.action} on reservation {self.reservation_id}"
+
+
+class LoyaltySettings(models.Model):
+    """Restaurant-specific loyalty program settings."""
+    restaurant = models.OneToOneField(Restaurant, on_delete=models.CASCADE, related_name='loyalty_settings')
+    enabled = models.BooleanField(default=False)
+    points_earning_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=100.00,
+        help_text="Amount of purchase (in currency) required to earn 1 point"
+    )
+    points_redemption_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=1.00,
+        help_text="Currency value of 1 point when redeeming"
+    )
+    points_expiry_days = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of days before points expire. Null means no expiry."
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Loyalty Settings for {self.restaurant.name}"
+
+
+class PointTransaction(models.Model):
+    """Track all point transactions for audit and balance history."""
+    TRANSACTION_TYPE_CHOICES = [
+        ('EARNED', 'Earned'),
+        ('REDEEMED', 'Redeemed'),
+        ('EXPIRED', 'Expired'),
+        ('REVERSED', 'Reversed'),
+    ]
+
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE, related_name='point_transactions')
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='point_transactions')
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPE_CHOICES)
+    points = models.IntegerField(help_text="Positive for earned, negative for redeemed/reversed")
+    balance_after = models.IntegerField(help_text="Customer balance after this transaction")
+    order = models.ForeignKey(Order, on_delete=models.SET_NULL, null=True, blank=True, related_name='point_transactions')
+    payment = models.ForeignKey(Payment, on_delete=models.SET_NULL, null=True, blank=True, related_name='point_transactions')
+    description = models.TextField(blank=True)
+    related_transaction = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='reversals', help_text="Reference to original transaction if this is a reversal")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True, help_text="When these points will expire (for earned points)")
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['customer', 'created_at']),
+            models.Index(fields=['restaurant', 'created_at']),
+            models.Index(fields=['expires_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.transaction_type}: {self.points} points for {self.customer.name}"

@@ -4,7 +4,7 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 import datetime
-from .models import Restaurant, Category, MenuItem, Table, Order, OrderItem, Zone, Reservation
+from .models import Restaurant, Category, MenuItem, Table, Order, OrderItem, Zone, Reservation, Customer
 
 User = get_user_model()
 
@@ -167,6 +167,206 @@ class OrderCreationTestCase(TestCase):
         created_order = Order.objects.get(id=response.data['id'])
         self.assertIsNone(created_order.table)
         self.assertEqual(created_order.order_type, 'takeaway')
+
+    def test_create_order_with_customer_name_phone_email(self):
+        """Test that order creation with customer details creates customer correctly."""
+        self.client.force_authenticate(user=self.manager)
+        
+        response = self.client.post('/api/auth/orders/create_with_items/', {
+            'table': self.table.id,
+            'order_type': 'dine-in',
+            'customer_phone': '01700000000',
+            'customer_name': 'John Doe',
+            'customer_email': 'john@example.com',
+            'items': [
+                {'menu_item': self.menu_item1.id, 'quantity': 1}
+            ]
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verify customer created with provided details
+        created_order = Order.objects.get(id=response.data['id'])
+        self.assertIsNotNone(created_order.customer)
+        self.assertEqual(created_order.customer.name, 'John Doe')
+        self.assertEqual(created_order.customer.phone, '01700000000')
+        self.assertEqual(created_order.customer.email, 'john@example.com')
+        self.assertEqual(created_order.customer.restaurant, self.restaurant)
+
+    def test_create_order_with_phone_only_uses_guest_name(self):
+        """Test that order creation with phone only uses Guest as default name."""
+        self.client.force_authenticate(user=self.manager)
+        
+        response = self.client.post('/api/auth/orders/create_with_items/', {
+            'table': self.table.id,
+            'customer_phone': '01700000000',
+            'items': [
+                {'menu_item': self.menu_item1.id, 'quantity': 1}
+            ]
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verify customer created with Guest name
+        created_order = Order.objects.get(id=response.data['id'])
+        self.assertIsNotNone(created_order.customer)
+        self.assertEqual(created_order.customer.name, 'Guest')
+        self.assertEqual(created_order.customer.phone, '01700000000')
+        self.assertIsNone(created_order.customer.email)
+
+    def test_create_order_updates_existing_customer_name_email(self):
+        """Test that order creation updates existing customer name/email when provided."""
+        self.client.force_authenticate(user=self.manager)
+        
+        # Create initial customer
+        existing_customer = Customer.objects.create(
+            restaurant=self.restaurant,
+            phone='01700000000',
+            name='Old Name',
+            email='old@example.com'
+        )
+        
+        # Create order with updated details
+        response = self.client.post('/api/auth/orders/create_with_items/', {
+            'table': self.table.id,
+            'customer_phone': '01700000000',
+            'customer_name': 'New Name',
+            'customer_email': 'new@example.com',
+            'items': [
+                {'menu_item': self.menu_item1.id, 'quantity': 1}
+            ]
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verify existing customer was updated
+        existing_customer.refresh_from_db()
+        self.assertEqual(existing_customer.name, 'New Name')
+        self.assertEqual(existing_customer.email, 'new@example.com')
+        self.assertEqual(existing_customer.phone, '01700000000')
+        
+        # Verify order linked to existing customer
+        created_order = Order.objects.get(id=response.data['id'])
+        self.assertEqual(created_order.customer, existing_customer)
+
+    def test_create_order_blank_name_email_does_not_erase_existing(self):
+        """Test that blank name/email does not overwrite existing customer data."""
+        self.client.force_authenticate(user=self.manager)
+        
+        # Create initial customer
+        existing_customer = Customer.objects.create(
+            restaurant=self.restaurant,
+            phone='01700000000',
+            name='Existing Name',
+            email='existing@example.com'
+        )
+        
+        # Create order with blank name/email
+        response = self.client.post('/api/auth/orders/create_with_items/', {
+            'table': self.table.id,
+            'customer_phone': '01700000000',
+            'customer_name': '',
+            'customer_email': '',
+            'items': [
+                {'menu_item': self.menu_item1.id, 'quantity': 1}
+            ]
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verify existing customer data preserved
+        existing_customer.refresh_from_db()
+        self.assertEqual(existing_customer.name, 'Existing Name')
+        self.assertEqual(existing_customer.email, 'existing@example.com')
+        self.assertEqual(existing_customer.phone, '01700000000')
+
+    def test_create_order_without_phone_creates_order_without_customer(self):
+        """Test that order creation without phone creates order without customer."""
+        self.client.force_authenticate(user=self.manager)
+        
+        response = self.client.post('/api/auth/orders/create_with_items/', {
+            'table': self.table.id,
+            'items': [
+                {'menu_item': self.menu_item1.id, 'quantity': 1}
+            ]
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verify order created without customer
+        created_order = Order.objects.get(id=response.data['id'])
+        self.assertIsNone(created_order.customer)
+
+    def test_customer_isolation_enforced(self):
+        """Test that customer matching is scoped to restaurant."""
+        self.client.force_authenticate(user=self.manager)
+        
+        # Create customer for other restaurant with same phone
+        other_customer = Customer.objects.create(
+            restaurant=self.other_restaurant,
+            phone='01700000000',
+            name='Other Customer'
+        )
+        
+        # Create order for current restaurant with same phone
+        response = self.client.post('/api/auth/orders/create_with_items/', {
+            'table': self.table.id,
+            'customer_phone': '01700000000',
+            'customer_name': 'Current Customer',
+            'items': [
+                {'menu_item': self.menu_item1.id, 'quantity': 1}
+            ]
+        }, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        
+        # Verify new customer created for current restaurant (not matched to other restaurant)
+        created_order = Order.objects.get(id=response.data['id'])
+        self.assertIsNotNone(created_order.customer)
+        self.assertEqual(created_order.customer.restaurant, self.restaurant)
+        self.assertEqual(created_order.customer.name, 'Current Customer')
+        self.assertNotEqual(created_order.customer.id, other_customer.id)
+        
+        # Verify other restaurant customer unchanged
+        other_customer.refresh_from_db()
+        self.assertEqual(other_customer.name, 'Other Customer')
+
+    def test_customer_serializer_includes_order_count(self):
+        """Test that CustomerSerializer includes order_count field."""
+        self.client.force_authenticate(user=self.manager)
+        
+        # Create a customer
+        customer = Customer.objects.create(
+            restaurant=self.restaurant,
+            name='Test Customer',
+            phone='01700000000'
+        )
+        
+        # Create some orders for the customer
+        order1 = Order.objects.create(
+            restaurant=self.restaurant,
+            customer=customer,
+            table=self.table,
+            order_type='dine-in',
+            status='paid',
+            total_amount=500.00
+        )
+        
+        order2 = Order.objects.create(
+            restaurant=self.restaurant,
+            customer=customer,
+            table=self.table,
+            order_type='dine-in',
+            status='open',
+            total_amount=300.00
+        )
+        
+        # Fetch customer via API
+        response = self.client.get(f'/api/auth/customers/{customer.id}/')
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['name'], 'Test Customer')
+        self.assertEqual(response.data['order_count'], 2)
 
     def test_create_order_role_permissions(self):
         """Test role-based access control for order creation."""

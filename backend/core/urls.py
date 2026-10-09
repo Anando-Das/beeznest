@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ZoneViewSet, ReservationViewSet, SignupView, LoginView, LogoutView, MeView, CSRFTokenView, RestaurantOnboardingView, CategoryViewSet, MenuItemViewSet, MenuItemPriceHistoryViewSet, TableViewSet, OrderViewSet, OrderItemViewSet, CustomerViewSet, ExpenseViewSet, DayCloseViewSet, StaffViewSet, LayoutObjectViewSet
+from .views import ZoneViewSet, ReservationViewSet, SignupView, LoginView, LogoutView, MeView, CSRFTokenView, RestaurantOnboardingView, CategoryViewSet, MenuItemViewSet, MenuItemPriceHistoryViewSet, TableViewSet, OrderViewSet, OrderItemViewSet, CustomerViewSet, ExpenseViewSet, DayCloseViewSet, StaffViewSet, LayoutObjectViewSet, LoyaltySettingsViewSet, PointTransactionViewSet
 
 urlpatterns = [
     path('csrf/', CSRFTokenView.as_view(), name='csrf'),
@@ -25,6 +25,8 @@ router.register(r'customers', CustomerViewSet, basename='customer')
 router.register(r'expenses', ExpenseViewSet, basename='expense')
 router.register(r'day-close', DayCloseViewSet, basename='day-close')
 router.register(r'staff', StaffViewSet, basename='staff')
+router.register(r'loyalty-settings', LoyaltySettingsViewSet, basename='loyalty-settings')
+router.register(r'point-transactions', PointTransactionViewSet, basename='point-transaction')
 
 urlpatterns += router.urls
 

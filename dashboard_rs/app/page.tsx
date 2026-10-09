@@ -14,6 +14,7 @@ import ExpensesManager from '@/components/ExpensesManager'
 import DayCloseManager from '@/components/DayCloseManager'
 import ReportsManager from '@/components/ReportsManager'
 import ReservationManager from '@/components/ReservationManager'
+import LoyaltySettingsManager from '@/components/LoyaltySettingsManager'
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Bell, BookOpen, Boxes, BriefcaseBusiness,
   CalendarDays, Check, ChevronDown, CircleDollarSign, Clock3, Coffee, Contact, CreditCard, Crown,
@@ -25,7 +26,7 @@ import {
 const green = '#2F855A'
 const nav: { group: string, items: [string, string, any][] }[] = [
   { group: 'Overview', items: [['Dashboard', '/dashboard', LayoutDashboard], ['Sales', '/sales', ShoppingCart], ['Orders', '/orders', ReceiptText], ['Kitchen', '/kitchen', Utensils]] },
-  { group: 'Manage', items: [['Menu', '/menu', Utensils], ['Layout', '/layout', Grid2X2], ['Reservations', '/reservations', CalendarDays], ['Customers', '/customers', Users], ['Staff', '/staff', Contact]] },
+  { group: 'Manage', items: [['Menu', '/menu', Utensils], ['Layout', '/layout', Grid2X2], ['Reservations', '/reservations', CalendarDays], ['Customers', '/customers', Users], ['Staff', '/staff', Contact], ['Loyalty', '/loyalty', Sparkles]] },
   { group: 'Grow', items: [['Marketing', '/marketing', MessageSquare], ['Upsell', '/upsell', Zap], ['QR Ordering', '/qr-ordering', QrCode], ['Website', '/website', Store], ['AI Manager', '/ai', Sparkles]] },
   { group: 'Money', items: [['Reports', '/reports', FileBarChart], ['Expenses', '/expenses', WalletCards], ['Day Close', '/day-close', CircleDollarSign]] },
 ]
@@ -68,8 +69,8 @@ export default function Page() {
   const canSee = (label: string) => {
     if (!role) return false;
     const p: Record<string, string[]> = {
-      OWNER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Reservations', 'Customers', 'Staff', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
-      MANAGER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Reservations', 'Customers', 'Staff', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
+      OWNER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Reservations', 'Customers', 'Staff', 'Loyalty', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
+      MANAGER: ['Dashboard', 'Sales', 'Orders', 'Kitchen', 'Menu', 'Layout', 'Reservations', 'Customers', 'Staff', 'Loyalty', 'Marketing', 'Upsell', 'QR Ordering', 'Website', 'AI Manager', 'Reports', 'Expenses', 'Day Close'],
       CASHIER: ['Dashboard', 'Sales', 'Orders', 'Customers', 'Reservations'],
       WAITER: ['Dashboard', 'Sales', 'Orders', 'Customers', 'Reservations'],
       KITCHEN: ['Dashboard', 'Kitchen', 'Menu']
@@ -113,10 +114,11 @@ export default function Page() {
         {path === '/reservations' && (canSee('Reservations') ? <ReservationManager userRole={role} prefillTableId={prefillTableId} onPrefillConsumed={() => setPrefillTableId(null)} /> : <LockedView />)}
         {path === '/customers' && (canSee('Customers') ? <CustomersManager /> : <LockedView />)}
         {path === '/staff' && (canSee('Staff') ? <StaffManager userRole={role} /> : <LockedView />)}
+        {path === '/loyalty' && (canSee('Loyalty') ? <LoyaltySettingsManager /> : <LockedView />)}
         {path === '/expenses' && (canSee('Expenses') ? <ExpensesManager /> : <LockedView />)}
         {path === '/day-close' && (canSee('Day Close') ? <DayCloseManager /> : <LockedView />)}
         {path === '/reports' && (canSee('Reports') ? <ReportsManager /> : <LockedView />)}
-        {!['/dashboard', '/sales', '/orders', '/kitchen', '/menu', '/layout', '/reservations', '/customers', '/staff', '/expenses', '/day-close', '/reports'].includes(path) && <Placeholder title={title} path={path} go={go} />}
+        {!['/dashboard', '/sales', '/orders', '/kitchen', '/menu', '/layout', '/reservations', '/customers', '/staff', '/loyalty', '/expenses', '/day-close', '/reports'].includes(path) && <Placeholder title={title} path={path} go={go} />}
       </div>
     </main>
     <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-around border-t border-[#D5E6DA] bg-white lg:hidden print:hidden">{([['Sales', '/sales', ShoppingCart], ['Orders', '/orders', ReceiptText], ['Kitchen', '/kitchen', Utensils], ['Dashboard', '/dashboard', Home], ['More', '/more', MoreHorizontal]] as [string, string, any][]).map(([label, href, Icon]) => {

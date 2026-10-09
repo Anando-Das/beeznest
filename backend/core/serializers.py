@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.utils import timezone
-from .models import Restaurant, Category, MenuItem, MenuItemPriceHistory, Table, Order, OrderItem, Customer, Expense, DayClose, Zone, Reservation, ReservationHistory, LayoutObject, Payment
+from .models import Restaurant, Category, MenuItem, MenuItemPriceHistory, Table, Order, OrderItem, Customer, Expense, DayClose, Zone, Reservation, ReservationHistory, LayoutObject, Payment, LoyaltySettings, PointTransaction
 
 User = get_user_model()
 
@@ -201,52 +201,83 @@ class OrderItemUpdateSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemCreateSerializer(many=True)
     customer_phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
-    
+    customer_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    customer_email = serializers.EmailField(required=False, allow_blank=True)
+    customer_id = serializers.IntegerField(required=False, allow_null=True)
+
     class Meta:
         model = Order
-        fields = ['table', 'order_type', 'status', 'items', 'customer_phone']
+        fields = ['table', 'order_type', 'status', 'items', 'customer_phone', 'customer_name', 'customer_email', 'customer_id']
         read_only_fields = ['id', 'restaurant', 'created_at', 'updated_at', 'total_amount']
-    
+
     def validate_table(self, value):
         if value and not value.is_active:
             raise serializers.ValidationError("Cannot create an order on an inactive table.")
         return value
-    
+
     def validate_items(self, value):
         if not value or len(value) == 0:
             raise serializers.ValidationError("At least one item is required.")
         return value
-    
+
     def validate(self, data):
         table = data.get('table')
         items = data.get('items', [])
-        
+        customer_id = data.get('customer_id')
+        customer_phone = data.get('customer_phone')
+        customer_name = data.get('customer_name')
+        customer_email = data.get('customer_email')
+
         request = self.context.get('request')
         if not request or not request.user.restaurant:
             raise serializers.ValidationError("User must belong to a restaurant.")
-        
+
         restaurant = request.user.restaurant
-        
+
         # Validate table belongs to restaurant
         if table and table.restaurant != restaurant:
             raise serializers.ValidationError({"table": "Table does not belong to your restaurant."})
-        
+
+        # Validate customer belongs to restaurant if customer_id is provided
+        if customer_id:
+            try:
+                customer = Customer.objects.get(id=customer_id, restaurant=restaurant)
+                data['customer'] = customer
+            except Customer.DoesNotExist:
+                raise serializers.ValidationError({
+                    "customer_id": "Customer not found or does not belong to your restaurant."
+                })
+
+            # If customer_id is provided, ignore phone/name/email (use customer's data)
+            # This prevents accidental customer creation/update when ID is specified
+            data.pop('customer_phone', None)
+            data.pop('customer_name', None)
+            data.pop('customer_email', None)
+
         # Validate all menu items belong to restaurant and are available
         for item_data in items:
             menu_item = item_data.get('menu_item')
             if not menu_item:
                 continue
-            
+
             if menu_item.category.restaurant != restaurant:
                 raise serializers.ValidationError({
                     "items": f"Menu item '{menu_item.name}' does not belong to your restaurant."
                 })
-            
+
             if not menu_item.is_available:
                 raise serializers.ValidationError({
                     "items": f"Menu item '{menu_item.name}' is not available."
                 })
-        
+
+        # Normalize phone and email (only if customer_id not provided)
+        if not customer_id:
+            if customer_phone:
+                data['customer_phone'] = customer_phone.strip()
+
+            if customer_email:
+                data['customer_email'] = customer_email.strip().lower()
+
         return data
 
 class OrderUpdateSerializer(serializers.ModelSerializer):
@@ -298,10 +329,154 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         return data
 
 class CustomerSerializer(serializers.ModelSerializer):
+    order_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Customer
         fields = '__all__'
         read_only_fields = ['id', 'restaurant', 'created_at']
+
+    def get_order_count(self, obj):
+        return obj.orders.count()
+
+    def validate_phone(self, value):
+        """Normalize phone by stripping whitespace."""
+        if value is not None:
+            return value.strip()
+        return value
+
+    def validate_email(self, value):
+        """Normalize email by stripping whitespace and lowercasing."""
+        if value is not None:
+            value = value.strip()
+            if value:
+                value = value.lower()
+        return value
+
+    def validate(self, data):
+        """Check for duplicate phone or email within the same restaurant."""
+        request = self.context.get('request')
+        if not request or not request.user.restaurant:
+            return data
+
+        restaurant = request.user.restaurant
+        phone = data.get('phone')
+        email = data.get('email')
+
+        # Get existing customer if updating
+        instance = self.instance
+
+        # Check phone uniqueness (only if non-empty)
+        if phone:
+            queryset = Customer.objects.filter(
+                restaurant=restaurant,
+                phone=phone
+            )
+            if instance:
+                queryset = queryset.exclude(pk=instance.pk)
+            if queryset.exists():
+                raise serializers.ValidationError({
+                    'phone': 'A customer with this phone number already exists in your restaurant.'
+                })
+
+        # Check email uniqueness (only if non-empty, case-insensitive)
+        if email:
+            queryset = Customer.objects.filter(
+                restaurant=restaurant,
+                email__iexact=email
+            )
+            if instance:
+                queryset = queryset.exclude(pk=instance.pk)
+            if queryset.exists():
+                raise serializers.ValidationError({
+                    'email': 'A customer with this email address already exists in your restaurant.'
+                })
+
+        return data
+
+
+class CustomerSearchSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for customer search results (POS autocomplete)."""
+
+    class Meta:
+        model = Customer
+        fields = ['id', 'name', 'phone', 'email']
+
+
+class CustomerOrderHistorySerializer(serializers.ModelSerializer):
+    """Serializer for order items in customer order history."""
+    menu_item_name = serializers.CharField(source='menu_item.name', read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ['menu_item_name', 'quantity', 'price_at_time', 'notes']
+
+
+class OrderHistorySerializer(serializers.ModelSerializer):
+    """Serializer for customer order history."""
+    items = CustomerOrderHistorySerializer(many=True, read_only=True)
+    table_name = serializers.CharField(source='table.name', read_only=True, allow_null=True)
+    payment_method = serializers.CharField(source='payment.method', read_only=True, allow_null=True)
+    payment_amount = serializers.DecimalField(source='payment.amount', read_only=True, allow_null=True, max_digits=10, decimal_places=2)
+    payment_timestamp = serializers.DateTimeField(source='payment.timestamp', read_only=True, allow_null=True)
+
+    class Meta:
+        model = Order
+        fields = ['id', 'order_type', 'status', 'total_amount', 'created_at', 'updated_at',
+                  'table_name', 'items', 'payment_method', 'payment_amount', 'payment_timestamp']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class CustomerOrderHistorySummarySerializer(serializers.ModelSerializer):
+    """Serializer for customer summary with order history statistics."""
+    total_orders = serializers.IntegerField(read_only=True)
+    total_spending = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+    most_recent_order_date = serializers.DateTimeField(read_only=True, allow_null=True)
+    orders = OrderHistorySerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Customer
+        fields = ['id', 'name', 'phone', 'email', 'points', 'created_at',
+                  'total_orders', 'total_spending', 'most_recent_order_date', 'orders']
+        read_only_fields = ['id', 'created_at', 'total_orders', 'total_spending', 'most_recent_order_date', 'orders']
+
+
+class LoyaltySettingsSerializer(serializers.ModelSerializer):
+    """Serializer for restaurant loyalty settings."""
+
+    class Meta:
+        model = LoyaltySettings
+        fields = ['id', 'enabled', 'points_earning_rate', 'points_redemption_rate', 'points_expiry_days', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+
+class PointTransactionSerializer(serializers.ModelSerializer):
+    """Serializer for point transactions."""
+    customer_name = serializers.CharField(source='customer.name', read_only=True)
+    order_id = serializers.IntegerField(source='order.id', read_only=True, allow_null=True)
+
+    class Meta:
+        model = PointTransaction
+        fields = ['id', 'transaction_type', 'points', 'balance_after', 'description',
+                  'customer_name', 'order_id', 'created_at', 'expires_at']
+        read_only_fields = ['id', 'created_at', 'balance_after']
+
+
+class PointRedemptionSerializer(serializers.Serializer):
+    """Serializer for point redemption request."""
+    points_to_redeem = serializers.IntegerField(min_value=1, help_text="Number of points to redeem")
+    order_id = serializers.IntegerField(required=True, help_text="Order ID to apply redemption to")
+    payment_method = serializers.CharField(required=False, help_text="Payment method to use after redemption (cash, card, bkash, nagad, other)")
+
+    def validate_points_to_redeem(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Points to redeem must be positive.")
+        return value
+
+    def validate_payment_method(self, value):
+        if value and value not in ['cash', 'card', 'bkash', 'nagad', 'other']:
+            raise serializers.ValidationError("Invalid payment method.")
+        return value
 
 class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
