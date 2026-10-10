@@ -15,6 +15,7 @@ import DayCloseManager from '@/components/DayCloseManager'
 import ReportsManager from '@/components/ReportsManager'
 import ReservationManager from '@/components/ReservationManager'
 import LoyaltySettingsManager from '@/components/LoyaltySettingsManager'
+import WebsiteManager from '@/components/WebsiteManager'
 import {
   Activity, AlertTriangle, ArrowDownRight, ArrowUpRight, Bell, BookOpen, Boxes, BriefcaseBusiness,
   CalendarDays, Check, ChevronDown, CircleDollarSign, Clock3, Coffee, Contact, CreditCard, Crown,
@@ -115,10 +116,11 @@ export default function Page() {
         {path === '/customers' && (canSee('Customers') ? <CustomersManager /> : <LockedView />)}
         {path === '/staff' && (canSee('Staff') ? <StaffManager userRole={role} /> : <LockedView />)}
         {path === '/loyalty' && (canSee('Loyalty') ? <LoyaltySettingsManager /> : <LockedView />)}
+        {path === '/website' && (canSee('Website') ? <WebsiteManager /> : <LockedView />)}
         {path === '/expenses' && (canSee('Expenses') ? <ExpensesManager /> : <LockedView />)}
         {path === '/day-close' && (canSee('Day Close') ? <DayCloseManager /> : <LockedView />)}
         {path === '/reports' && (canSee('Reports') ? <ReportsManager /> : <LockedView />)}
-        {!['/dashboard', '/sales', '/orders', '/kitchen', '/menu', '/layout', '/reservations', '/customers', '/staff', '/loyalty', '/expenses', '/day-close', '/reports'].includes(path) && <Placeholder title={title} path={path} go={go} />}
+        {!['/dashboard', '/sales', '/orders', '/kitchen', '/menu', '/layout', '/reservations', '/customers', '/staff', '/loyalty', '/website', '/expenses', '/day-close', '/reports'].includes(path) && <Placeholder title={title} path={path} go={go} />}
       </div>
     </main>
     <nav className="fixed inset-x-0 bottom-0 z-20 flex h-16 items-center justify-around border-t border-[#D5E6DA] bg-white lg:hidden print:hidden">{([['Sales', '/sales', ShoppingCart], ['Orders', '/orders', ReceiptText], ['Kitchen', '/kitchen', Utensils], ['Dashboard', '/dashboard', Home], ['More', '/more', MoreHorizontal]] as [string, string, any][]).map(([label, href, Icon]) => {

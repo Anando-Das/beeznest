@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import ZoneViewSet, ReservationViewSet, SignupView, LoginView, LogoutView, MeView, CSRFTokenView, RestaurantOnboardingView, CategoryViewSet, MenuItemViewSet, MenuItemPriceHistoryViewSet, TableViewSet, OrderViewSet, OrderItemViewSet, CustomerViewSet, ExpenseViewSet, DayCloseViewSet, StaffViewSet, LayoutObjectViewSet, LoyaltySettingsViewSet, PointTransactionViewSet
+from .views import ZoneViewSet, ReservationViewSet, SignupView, LoginView, LogoutView, MeView, CSRFTokenView, RestaurantOnboardingView, WebsiteStatusView, WebsiteRequestView, CategoryViewSet, MenuItemViewSet, MenuItemPriceHistoryViewSet, TableViewSet, OrderViewSet, OrderItemViewSet, CustomerViewSet, ExpenseViewSet, DayCloseViewSet, StaffViewSet, LayoutObjectViewSet, LoyaltySettingsViewSet, PointTransactionViewSet
 
 urlpatterns = [
     path('csrf/', CSRFTokenView.as_view(), name='csrf'),
@@ -9,6 +9,8 @@ urlpatterns = [
     path('logout/', LogoutView.as_view(), name='logout'),
     path('me/', MeView.as_view(), name='me'),
     path('restaurant/onboarding/', RestaurantOnboardingView.as_view(), name='restaurant_onboarding'),
+    path('website/status/', WebsiteStatusView.as_view(), name='website_status'),
+    path('website/request/', WebsiteRequestView.as_view(), name='website_request'),
 ]
 
 router = DefaultRouter()

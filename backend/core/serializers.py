@@ -3,14 +3,14 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.db import transaction
 from django.utils import timezone
-from .models import Restaurant, Category, MenuItem, MenuItemPriceHistory, Table, Order, OrderItem, Customer, Expense, DayClose, Zone, Reservation, ReservationHistory, LayoutObject, Payment, LoyaltySettings, PointTransaction
+from .models import Restaurant, Category, MenuItem, MenuItemPriceHistory, Table, Order, OrderItem, Customer, Expense, DayClose, Zone, Reservation, ReservationHistory, LayoutObject, Payment, LoyaltySettings, PointTransaction, WebsiteRequest, WebsiteRequestPhoto
 
 User = get_user_model()
 
 class RestaurantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Restaurant
-        fields = ['id', 'name', 'address', 'created_at', 'updated_at']
+        fields = ['id', 'name', 'address', 'website_url', 'website_enabled', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 class UserSerializer(serializers.ModelSerializer):
@@ -691,3 +691,82 @@ class ReservationSerializer(serializers.ModelSerializer):
             )
             svc.sync_table_after_reservation_change(reservation, previous_table=previous_table)
             return reservation
+
+
+class WebsiteRequestPhotoSerializer(serializers.ModelSerializer):
+    """Serializer for website request photos."""
+    class Meta:
+        model = WebsiteRequestPhoto
+        fields = ['id', 'photo', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at']
+
+
+class WebsiteRequestSerializer(serializers.ModelSerializer):
+    """Serializer for website requests."""
+    photos = WebsiteRequestPhotoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = WebsiteRequest
+        fields = ['id', 'website_name', 'description', 'logo', 'colours', 'status', 'created_at', 'updated_at', 'photos']
+        read_only_fields = ['id', 'status', 'created_at', 'updated_at', 'photos']
+
+
+class WebsiteRequestCreateSerializer(serializers.Serializer):
+    """Serializer for creating a website request."""
+    website_name = serializers.CharField(max_length=255, required=True)
+    description = serializers.CharField(required=False, allow_blank=True)
+    logo = serializers.ImageField(required=False, allow_null=True)
+    colours = serializers.CharField(required=False, allow_blank=True)  # Accept JSON string from FormData
+    photos = serializers.ListField(
+        child=serializers.ImageField(),
+        required=True,
+        min_length=10
+    )
+
+    def validate_website_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("Website name is required.")
+        return value.strip()
+
+    def validate_logo(self, value):
+        if value is not None:
+            if not value.content_type.startswith('image/'):
+                raise serializers.ValidationError("Logo must be an image file.")
+        return value
+
+    def validate_colours(self, value):
+        # Parse JSON string if provided
+        if value:
+            import json
+            try:
+                colours_list = json.loads(value)
+                if not isinstance(colours_list, list):
+                    raise serializers.ValidationError("Colours must be a list.")
+                
+                # Validate hex colour format
+                for colour in colours_list:
+                    if not colour.startswith('#') or len(colour) not in [4, 7]:
+                        raise serializers.ValidationError(f"Invalid colour format: {colour}. Use hex format like #FFFFFF or #FFF.")
+                
+                return colours_list
+            except json.JSONDecodeError:
+                raise serializers.ValidationError("Colours must be a valid JSON array.")
+        return []
+
+    def validate_photos(self, value):
+        if len(value) < 10:
+            raise serializers.ValidationError("At least 10 photos are required.")
+
+        # Validate each photo
+        for i, photo in enumerate(value):
+            if not photo.content_type.startswith('image/'):
+                raise serializers.ValidationError(f"Photo {i+1} must be an image file.")
+
+            # Validate size (2MB limit)
+            max_size = 2 * 1024 * 1024  # Exactly 2MB
+            if photo.size > max_size:
+                raise serializers.ValidationError(
+                    f"Photo {i+1} exceeds 2MB limit. File size: {photo.size} bytes."
+                )
+
+        return value

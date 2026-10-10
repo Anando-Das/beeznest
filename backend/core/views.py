@@ -1,10 +1,11 @@
 from rest_framework import status, views, serializers
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.parsers import MultiPartParser
 from django.contrib.auth import authenticate, login, logout
 from django.middleware.csrf import get_token
-from .serializers import SignupSerializer, LoginSerializer, UserSerializer, RestaurantSerializer
-from .models import Restaurant
+from .serializers import SignupSerializer, LoginSerializer, UserSerializer, RestaurantSerializer, WebsiteRequestCreateSerializer, WebsiteRequestSerializer
+from .models import Restaurant, WebsiteRequest
 
 class CSRFTokenView(views.APIView):
     permission_classes = [AllowAny]
@@ -57,7 +58,7 @@ class RestaurantOnboardingView(views.APIView):
     def post(self, request):
         if request.user.restaurant:
             return Response({"detail": "User already has a restaurant."}, status=status.HTTP_400_BAD_REQUEST)
-        
+
         serializer = RestaurantSerializer(data=request.data)
         if serializer.is_valid():
             restaurant = serializer.save()
@@ -66,6 +67,91 @@ class RestaurantOnboardingView(views.APIView):
             request.user.save()
             return Response(UserSerializer(request.user).data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class WebsiteStatusView(views.APIView):
+    """API endpoint to get website status for the authenticated user's restaurant."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not request.user.restaurant:
+            return Response({"detail": "You must belong to a restaurant."}, status=status.HTTP_400_BAD_REQUEST)
+
+        restaurant = request.user.restaurant
+        return Response({
+            "has_website": restaurant.website_enabled,
+            "website_url": restaurant.website_url
+        }, status=status.HTTP_200_OK)
+
+
+class WebsiteRequestView(views.APIView):
+    """API endpoint for submitting and retrieving website requests."""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def get(self, request):
+        """Get the current restaurant's website request status."""
+        if not request.user.restaurant:
+            return Response({"detail": "You must belong to a restaurant."}, status=status.HTTP_400_BAD_REQUEST)
+
+        restaurant = request.user.restaurant
+        # Get the most recent request
+        request_obj = WebsiteRequest.objects.filter(restaurant=restaurant).order_by('-created_at').first()
+
+        if not request_obj:
+            return Response({
+                "has_request": False,
+                "request": None
+            }, status=status.HTTP_200_OK)
+
+        serializer = WebsiteRequestSerializer(request_obj)
+        return Response({
+            "has_request": True,
+            "request": serializer.data
+        }, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        """Submit a new website request."""
+        if not request.user.restaurant:
+            return Response({"detail": "You must belong to a restaurant."}, status=status.HTTP_400_BAD_REQUEST)
+
+        restaurant = request.user.restaurant
+
+        # Check for existing active requests (PENDING or IN_PROGRESS)
+        active_request = WebsiteRequest.objects.filter(
+            restaurant=restaurant,
+            status__in=['PENDING', 'IN_PROGRESS']
+        ).exists()
+
+        if active_request:
+            return Response(
+                {"detail": "You already have an active website request. Please wait for it to be processed."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        serializer = WebsiteRequestCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            # Create the website request
+            website_request = WebsiteRequest.objects.create(
+                restaurant=restaurant,
+                website_name=serializer.validated_data['website_name'],
+                description=serializer.validated_data.get('description', ''),
+                logo=serializer.validated_data.get('logo'),
+                colours=serializer.validated_data.get('colours', []),
+                status='PENDING'
+            )
+
+            # Create photo records
+            from .models import WebsiteRequestPhoto
+            for photo in serializer.validated_data['photos']:
+                WebsiteRequestPhoto.objects.create(
+                    website_request=website_request,
+                    photo=photo
+                )
+
+        response_serializer = WebsiteRequestSerializer(website_request)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 from rest_framework import viewsets
 from rest_framework.exceptions import PermissionDenied

@@ -5,6 +5,8 @@ from django.utils import timezone
 class Restaurant(models.Model):
     name = models.CharField(max_length=255)
     address = models.TextField(blank=True, null=True)
+    website_url = models.URLField(blank=True, null=True, help_text="Restaurant website URL")
+    website_enabled = models.BooleanField(default=False, help_text="Whether the restaurant website is enabled/published")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -344,3 +346,44 @@ class PointTransaction(models.Model):
 
     def __str__(self):
         return f"{self.transaction_type}: {self.points} points for {self.customer.name}"
+
+
+class WebsiteRequest(models.Model):
+    """Website request from a restaurant for website creation."""
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('IN_PROGRESS', 'In Progress'),
+        ('COMPLETED', 'Completed'),
+    ]
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE, related_name='website_requests')
+    website_name = models.CharField(max_length=255, help_text="Name for the website")
+    description = models.TextField(blank=True, null=True, help_text="Description of the website requirements")
+    logo = models.ImageField(upload_to='website_requests/logos/', blank=True, null=True, help_text="Restaurant logo")
+    colours = models.JSONField(default=list, blank=True, help_text="List of hex colour codes for website theme")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['restaurant', 'status']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"Website Request for {self.restaurant.name} - {self.status}"
+
+
+class WebsiteRequestPhoto(models.Model):
+    """Photos attached to a website request."""
+    website_request = models.ForeignKey(WebsiteRequest, on_delete=models.CASCADE, related_name='photos')
+    photo = models.ImageField(upload_to='website_requests/photos/')
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['uploaded_at']
+
+    def __str__(self):
+        return f"Photo for request {self.website_request.id}"
